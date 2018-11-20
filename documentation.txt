@@ -1,0 +1,192 @@
+File Allocation Structure:
+     I will be emulating the fat file structure. My filesystem will be of
+     fixed size within a single file. Together, the allocation array and data
+     section will represent the entirety of user-defined memory space. The
+     data section will store actual file contents while the allocation array
+     will store a mapping of files to their corresponding blocks.
+
+     Allocation Array:
+     	The first section will be an allocation array which
+     	maps files to their corresponding blocks. Each index in this array will
+     	be 4 bytes long so that it can hold a signed integer. Each index will
+	directly map to a single block within the data section. The value of -2
+     	means that the corresponding block does not contain a file. A -1 means
+     	that the corresponding block is the final block of the file. Any other
+     	value within each index of the allocation array corresponds to the
+     	next block of the current file. There will be an innate assumption that
+     	the root of the filesystem must also be at index 0. This system also
+     	assumes all file paths are absolute.
+	
+     Data Section:
+     	The data section will be the second half of my filesystem. The section
+	will be split into equal length blocks to store files. The first few
+	bytes of the first block of a file will store meta-information such as
+	last modication time, file-type, and parent directory. Within a
+	directory, each file/subdirectory will be \n seperated and be listed as
+	filename:number where number corresponds to the location of the first
+	block of the file.
+
+Psuedocode:
+
+    // struct to hold all block indices of a file and file meta data
+    lFile:
+	- int * blocks
+	- char * last access time
+	- char fileType
+	- char mode
+	- int curOffset
+	- int curBlock
+	- char * buffer
+	- int bufsize
+	- int bufCount
+	- int blockLen
+
+    // an infinite loop which waits for users to call filesystem functions.
+    main:
+	- open filesystem file
+	- set up memmapping of data section into block sizes.
+	- while(true):
+	   - get user file command
+	   - perform user command
+
+    // opens file in a corresponding mode, returning a lFile struct pointer.
+       if mode is write, contents are erased and meta-data is reset. If mode
+       is append, current offset is set to end of file.
+    openLfile(absolutePath, mode):
+	- loop through absolute path in directory tree starting at root.
+	     - if:
+		- a file/directory does not exist in defined path, return -1
+	- malloc an lFile structure, set file mode
+	- grab meta data from first block of file and populate
+	- if file is a directory and mode is write or append, return -1
+	- set curBlock to initial file block
+	- set curOffset to just after meta info
+	- if mode is write:
+	  - delete all successive blocks for file and reset meta-information
+	- grab meta data from first block of file and populate lFile struct
+	- loop through directory structure until hitting -1 in the
+	  allocation array.
+	- Store each block index within the lFile struct.
+	- if mode is append:
+	   - set lfile.curOffset to EOF position
+	- return lFile struct
+
+    // writes any deferred writes and frees file struct
+    closefile(lFile):
+	- write any buffered characters to the file at the current filehead
+	  pointer location. Ensures to continue to successive file blocks
+	  if needed.
+	- free the malloced lFile struct.
+
+    // creates a file within data section using directory structure and
+       allocation table. This file is populated with meta-data.
+    createfile(absolutePath):
+       - loop through absolute path and get file name and full directory
+       	 path to file.
+	      - if path does not exist, return -1
+       - Ensure file name matches filesystem requirements
+       - loop through file system's allocation array and find first open
+       	 block, mark the block index as -1 to signify the end of a file,
+	 store the block index in blockIndex.
+       - read contents of parentDirectory into memory.
+       	 Append "filename:blockIndex\n" to memory contents.
+       - if size of directory + len("filename:blockIndex\n") % blocksize != 0
+       	    - loop through filesystem allocation array and secure first
+	      available block by writing EOF. Write over final block entry
+	      in allocation array with pointer to the new block rather than
+	      EOF.
+       - overwrite old directory contents with new directory contents stored
+       	 in memory. If additionally blocks were needed, continue to the secured
+	 blocks until finished writing directory contents.
+       - update directory meta information
+       - update newfile meta-information
+       - return 0
+
+    // creates a subdirectory within data section using directory structure and
+       allocation table. This subdirectory is populated with meta-data.
+    createDir(absolutePath):
+       - loop through absolute path and get new directory name and full
+       	 directory path to new directory.
+	      - if path does not exist, return -1
+       - Ensure directory name matches filesystem requirements
+       - loop through file system's allocation array and find first open
+       	 block, mark the block index as -1 to signify the end of a file,
+	 store the block index in blockIndex.
+       - read contents of parentDirectory into memory.
+       	 Append "subDirname:blockIndex\n" to memory contents.
+       - if size of directory + len("subDirname:blockIndex\n") % blocksize != 0
+       	    - loop through filesystem allocation array and secure first
+	      available block by writing EOF. Write over final block entry
+	      in allocation array with pointer to the new block rather than
+	      EOF.
+       - overwrite old directory contents with new directory contents stored
+       	 in memory. If additionally blocks were needed, continue to the secured
+	 blocks until finished writing directory contents.
+       - update parent directory meta-information
+       - update new directory meta-information
+       - return 0
+
+    // writes to a file at the lfile.curPos file location. Defers writes until
+       lfile.buffer is full to minimise file access. Secures additional file
+       blocks within the allocation array if needed.
+    writeFile(struct * lFile, char * words):
+       - if lFile.mode == read, return -1
+       - secureInput(lfile, len(words))
+       - store words within lFile.buffer until buffer is full.
+       - if lfile.buffer is full:
+       	 - lseek to lFile.curOffset.
+       	 - begin writing buffer contents ontop of and after EOF character.
+	 - If block is full, lseek to next block of file and continue writing.
+       	 - Write EOF character when done.
+       - set bufCount to 0, store leftover words in buffer, update bufCount
+       - update meta data within data section of fileSystem
+
+    // if the file requires additional blocks to fit the contents of inputlen,
+       then they are secured by looping through the allocation table. They new
+       blocks are linked onto the tail of the final block in the file
+    secureInput(struct * lFile, int inputLen)
+       - find final block within lFile blocks array. Go to that block within
+       	 the data section.
+       - find the end of the file in the block using lFile's blockLen variable.
+       - check if inputLen + newSize is larger than block Size.
+       - if so, secure enough blocks within filesystem to fit all words and
+       	 update allocation table.
+       - return -1 if not enough room
+       - update lFile struct to reflect these additional blocks.
+       - return 0
+
+    // reads file at current file-head position until buffersize is reached or
+       the end of the file is reached.
+    readFile(struct * lFile, char * buffer, int buffsize):
+    	- if lfile.mode != read, return -1
+	- lseek to current file position by referencing lseek.curOffset
+	- Call read on file from current position to
+	  min(curPos+bufsize, endOfCurrentBlock)
+	- if need to continue to next block, lseek to next block for more data.
+	- continue this process until hitting EOF.
+	- store everything read into buffer
+	- return number of chars read
+
+   // deletes a file from filesystem. First removes file from allocation array.
+   Then removes file from parent directory by reading parent directory in to
+   memory, removing filelisting, then writing back to parent directory.
+   deleteFile(absolutePath):
+       - loop through absolute path and get file index number and
+       	 container directory number of file.
+	      - if path does not exist, return -1
+       - loop through file blocks using the allocation array and set each
+       	 to -2 so filesystem knows it is now empty.
+       - open container directory and read all of its contents into memory.
+       - remove the desired file from directory listing.
+       - write files/subdirectories to filesystem file.
+       - return 0
+
+   // set current offset and current block within lfile struct to new
+      file position.
+   NSeek(lFile, offset):
+   	- if offset + lfile.curBlock*blockSize + lfile.curoffset > file size, return -1
+   	- if offset + lfile.curBlock*blockSize + lfile.curoffset < file start size, return -1
+	- loop through to desired offset, ensuring to jump to succcessive file blocks
+	- set lfile.curblock to current block
+	- count number of chars from current location to start of the block and
+	  set it as lfile.curoffset.
