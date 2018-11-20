@@ -174,12 +174,20 @@ Psuedocode:
        - loop through absolute path and get file index number and
        	 container directory number of file.
 	      - if path does not exist, return -1
+       - if file is a directory and is not empty, return -1
        - loop through file blocks using the allocation array and set each
        	 to -2 so filesystem knows it is now empty.
        - open container directory and read all of its contents into memory.
        - remove the desired file from directory listing.
        - write files/subdirectories to filesystem file.
        - return 0
+
+   // Recursively deletes all files/subdirectories within directory.
+      Finally, deletes desired directory
+   deleteDir(absolutePath):
+       - perform a depth-first search of contents within the directory.
+       - call deleteFile in reverse order based on postnumber.
+       - finally call deleteFile on the current directory.
 
    // set current offset and current block within lfile struct to new
       file position.
