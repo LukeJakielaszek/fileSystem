@@ -184,7 +184,9 @@ Psuedocode:
    // set current offset and current block within lfile struct to new
       file position.
    NSeek(lFile, offset):
-   	- if offset + lfile.curBlock*blockSize + lfile.curoffset > file size, return -1
+	- write contents within lfile.buffer to file at current filehead position 
+	- lfile.buffcount = 0
+	- if offset + lfile.curBlock*blockSize + lfile.curoffset > file size, return -1
    	- if offset + lfile.curBlock*blockSize + lfile.curoffset < file start size, return -1
 	- loop through to desired offset, ensuring to jump to succcessive file blocks
 	- set lfile.curblock to current block
