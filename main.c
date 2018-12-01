@@ -3,31 +3,39 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <errno.h>
 
 #include "llist.h"
+#include "utilities.h"
+// error numbers
+const int STAT_FAILURE = -2;
 
-#define DISK_SIZE 1000
-#define BLOCK_SIZE 20
-#define INDICE_SIZE 11
+// filesystem information
+#define DISK_SIZE 100
+#define BLOCK_SIZE 3
+#define INDICE_SIZE 8
+int INDEX_SIZE; // size of index to represent all of memory 
+int DATA_SIZE; // size of memory excluding index
+int NUM_BLOCKS; // number of blocks within the data section
+int ALLOC_DISK_SPACE; // Size of disk represented
+char fileSystemName[50] = "fileSystem.txt"; // filesystem filename
 
-// size of index to represent all of memory 
-int INDEX_SIZE;
+struct Blocks{
+  char data[BLOCK_SIZE];
+};
 
-// size of memory excluding index
-int DATA_SIZE;
+struct Indices{
+  char data[INDICE_SIZE];
+};
 
-// number of blocks within the data section
-int NUM_BLOCKS;
-
-// Size of disk represented
-int ALLOC_DISK_SPACE;
-
-// filesystem filename
-char fileSystemName[50] = "fileSystem.txt";
-
+// prototypes
 void createFileSystem();
 int invalidDiskParams();
 void getDiskSizes();
+void mapFileSystem(struct Blocks ** blocks, struct Indices ** indices);
 
 int main(){
   // check validity of entered parameters
@@ -52,8 +60,42 @@ int main(){
 
   // creates a filesystem with allocation array initialized to empty (-1)
   createFileSystem();
+
+  struct Blocks * blocks;
+  struct Indices * indices;
+
+  mapFileSystem(&blocks, &indices);
+
+  printf("blocks:[%s]\n", blocks[0].data);
+
+  printf("indices[%s]\n", indices[0].data);
+
+
   
   return 0;
+}
+
+void mapFileSystem(struct Blocks ** blocks, struct Indices ** indices){
+  int fd;
+  struct stat stat_buff;
+
+  // opens new filesystem file, checks for success
+  if((fd = open(fileSystemName, O_RDWR)) < 0){
+    fprintf(stderr, "ERROR: Failed to open %s.\n", fileSystemName);
+    exit(EXIT_FAILURE);
+  }
+
+  // mmap filesystem
+  if((*indices = (struct Indices *)mmap(NULL, ALLOC_DISK_SPACE,
+				     PROT_WRITE|PROT_READ, MAP_SHARED,
+				     fd, 0)) == MAP_FAILED){
+    fprintf(stderr, "ERROR: Failed to map %s: %s.\n", fileSystemName,
+	    strerror(errno));
+    exit(EXIT_FAILURE);
+  }
+
+  // set block pointer to offset
+  *blocks = (struct Blocks *)((*indices)+NUM_BLOCKS);
 }
 
 // creates initial filesystem file
@@ -81,9 +123,13 @@ void createFileSystem(){
   // initialize allocation array to empty
   int i;
   for(i = 0; i < NUM_BLOCKS; i++){
-    fprintf(f, "%10d|", -1);
+    fprintf(f, "%08X", -1);
   }
 
+  for(i = 0; i < DATA_SIZE; i++){
+    fprintf(f, "0");
+  }
+  
   fclose(f);
   
   printf("File System Constructed\n\n");
