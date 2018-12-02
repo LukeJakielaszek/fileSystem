@@ -8,13 +8,17 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 
 // filesystem information
-#define DISK_SIZE 100
-#define BLOCK_SIZE 3
-#define INDICE_SIZE 8
-#define OPEN_INDEX -1
-#define EOF_INDEX -2
+#define DISK_SIZE 100 // size in bytes of filesystem
+#define BLOCK_SIZE 3 // size in bytes of blocks
+#define INDICE_SIZE 8 // size in bytes of index
+#define OPEN_INDEX -1 // indicates unused index location
+#define EOF_INDEX -2 // indicates file ends at index location
+#define FILE_TYPE 70 // signifies file is a file F:70
+#define DIRECTORY_TYPE 68 // signifies file is a dir D:68
+#define META_SIZE 21 // size in bytes of meta section
 int INDEX_SIZE; // size of index to represent all of memory 
 int DATA_SIZE; // size of memory excluding index
 int NUM_BLOCKS; // number of blocks within the data section
@@ -31,9 +35,12 @@ struct Indices{
   char data[INDICE_SIZE];
 };
 
-// user-defined libraries
-#include "llist.h"
-#include "utilities.h"
+struct LFILE{
+  int startBlock;
+  int curBlock;
+  int offSet;
+  int parentBlock;
+};
 
 // prototypes
 void createFileSystem();
@@ -43,6 +50,11 @@ void mapFileSystem(struct Blocks ** blocks, struct Indices ** indices);
 int getOpenBlock(struct Indices * indices, struct Blocks * blocks);
 int hexToInt(struct Indices index);
 void claimIndex(struct Indices * indices, int openIndex);
+char * createMeta(char type);
+struct LFILE * createDir(char * dirName,
+		  struct Indices * indices, struct Blocks * blocks);
+void writeData(int blockIndex, int offset, int curChar, char * data,
+	       struct Blocks * blocks, struct Indices * indices);
 
 int main(){
   // check validity of entered parameters
@@ -74,12 +86,62 @@ int main(){
   // creates a filesystem mapping to memory
   mapFileSystem(&blocks, &indices);
 
+  createDir("", indices, blocks);
+  return 0;
+}
+
+// create a directory with only meta data
+struct LFILE * createDir(char * dirName,
+			 struct Indices * indices, struct Blocks * blocks){
   // find and claim the next open block
   int open = getOpenBlock(indices, blocks);
 
-  printf("available block at [%d]\n", open);
-  
-  return 0;
+  printf("available block at [%d]\n", open);  
+
+  char * meta = createMeta(FILE_TYPE);
+
+  printf("[%s]\n", meta);
+
+  // checks if root directory
+  if(open == 0){
+    writeData(open, 0, 0, meta, blocks, indices);
+  }
+}
+
+// recursively write data to files, getting new block if neccessary
+void writeData(int blockIndex, int offset, int curChar, char * data,
+	       struct Blocks * blocks, struct Indices * indices){
+  int i = 0;
+  for(i = 0; curChar <= strlen(data)-1; i++, curChar++){
+    if(i+offset >= BLOCK_SIZE && i != 0){
+      // block is full
+      // find and claim the next open block
+      int open = getOpenBlock(indices, blocks);
+
+      writeData(open, 0, curChar, data, blocks, indices);
+      break;
+    }
+    printf("%d:%d\n", blockIndex, curChar);
+
+    // overwrite block char with new data
+    blocks[blockIndex].data[i] = data[curChar];
+  }
+}
+
+// creates a string representation of meta data
+char * createMeta(char type){
+  // gets date and time
+  time_t curTime = time(0);
+  struct tm* tm_info = localtime(&curTime);
+  char * buffer = (char *)malloc(sizeof(char)*META_SIZE+1);
+  strftime(buffer, META_SIZE, "%Y-%m-%d %H:%M:%S", tm_info);
+
+  // adds filetype to string
+  buffer[META_SIZE-2] = ' ';
+  buffer[META_SIZE-1] = type;
+  buffer[META_SIZE] = '\0';
+
+  return buffer;
 }
 
 // returns first available block index, -1 if none are available
@@ -106,6 +168,7 @@ int getOpenBlock(struct Indices * indices, struct Blocks * blocks){
   // return index location
   return retIndex;
 }
+
 
 // claims index by writing claimedIndex hex val to filesystem indice section
 void claimIndex(struct Indices * indices, int openIndex){

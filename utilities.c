@@ -1,9 +1,8 @@
-#include <stdio.h>
-#include <time.h>
-
+// prototypes
 void createDir(char * dirName,
 	       struct Indices * indices, struct Blocks * blocks);
 
+// functions
 void createDir(char * dirName,
 	       struct Indices * indices, struct Blocks * blocks){
   time_t curTime = time(0);
