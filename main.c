@@ -126,28 +126,33 @@ void updateIndex(int indexLocation, int nextIndex, struct Indices * indices){
   }
 }
 
-
 // recursively write data to files, getting new block if neccessary
 void writeData(int blockIndex, int offset, int curChar, char * data,
 	       struct Blocks * blocks, struct Indices * indices){
-  if(blockIndex == -1){
-    fprintf(stderr, "ERROR: Disk Full. Unable to fully add [%s]", data);
-    exit(EXIT_FAILURE);
-  }
-  
+  // writes data to file at char offset
   int i = 0;
   for(i = 0; curChar <= strlen(data)-1; i++, curChar++){
-    if(i+offset >= BLOCK_SIZE && i != 0){
-      // block is full
-      // find and claim the next open block
-      int open = getOpenBlock(indices, blocks);
+    // if block is full
+    if(i+offset >= BLOCK_SIZE){
+      // get value in indice
+      int open = hexToInt(indices[blockIndex]);
+      
+      // if index was last block in file
+      if(open == EOF_INDEX){
+	// find and claim the next open block
+	open = getOpenBlock(indices, blocks);
 
-      // if there is another block available, point to it
-      if(open != -1){
-	updateIndex(blockIndex, open, indices);
+	// if there is another block available, point to it
+	if(open != -1){
+	  updateIndex(blockIndex, open, indices);
+	}else{
+	  // checks if unable to find next block
+	  fprintf(stderr, "ERROR: Disk Full. Unable to fully add [%s]", data);
+	  exit(EXIT_FAILURE);
+	}
       }
 
-      // conotinue writing data to next block
+      // continue writing data to next block
       writeData(open, 0, curChar, data, blocks, indices);
       break;
     }
