@@ -9,24 +9,26 @@
 #include <errno.h>
 
 #include "llist.h"
-#include "utilities.h"
-// error numbers
-const int STAT_FAILURE = -2;
+//#include "utilities.h"
 
 // filesystem information
 #define DISK_SIZE 100
 #define BLOCK_SIZE 3
 #define INDICE_SIZE 8
+#define OPEN_INDEX -1
+#define EOF_INDEX -2
 int INDEX_SIZE; // size of index to represent all of memory 
 int DATA_SIZE; // size of memory excluding index
 int NUM_BLOCKS; // number of blocks within the data section
 int ALLOC_DISK_SPACE; // Size of disk represented
 char fileSystemName[50] = "fileSystem.txt"; // filesystem filename
 
+// array of data section block size
 struct Blocks{
   char data[BLOCK_SIZE];
 };
 
+// array of indice section index size
 struct Indices{
   char data[INDICE_SIZE];
 };
@@ -36,6 +38,9 @@ void createFileSystem();
 int invalidDiskParams();
 void getDiskSizes();
 void mapFileSystem(struct Blocks ** blocks, struct Indices ** indices);
+int getOpenBlock(struct Indices * indices, struct Blocks * blocks);
+int hexToInt(struct Indices index);
+void claimIndex(struct Indices * indices, int openIndex);
 
 int main(){
   // check validity of entered parameters
@@ -61,18 +66,72 @@ int main(){
   // creates a filesystem with allocation array initialized to empty (-1)
   createFileSystem();
 
-  struct Blocks * blocks;
-  struct Indices * indices;
+  struct Blocks * blocks; // block pointers
+  struct Indices * indices; //indice pointers
 
+  // creates a filesystem mapping to memory
   mapFileSystem(&blocks, &indices);
 
-  printf("blocks:[%s]\n", blocks[0].data);
+  // find and claim the next open block
+  int open = getOpenBlock(indices, blocks);
 
-  printf("indices[%s]\n", indices[0].data);
-
-
+  printf("available block at [%d]\n", open);
   
   return 0;
+}
+
+// returns first available block index, -1 if none are available
+int getOpenBlock(struct Indices * indices, struct Blocks * blocks){
+  int retIndex = -1;
+  
+  // search through indices of filesystem
+  int index = 0;
+  while(index < NUM_BLOCKS){
+    char buffer[INDICE_SIZE];
+
+    // check if index is available
+    if(hexToInt(indices[index]) == OPEN_INDEX){
+      retIndex = index;
+      break;
+    }
+    
+    index++;
+  }
+
+  // claim available index
+  claimIndex(indices, retIndex);
+
+  // return index location
+  return retIndex;
+}
+
+// claims index by writing claimedIndex hex val to filesystem indice section
+void claimIndex(struct Indices * indices, int openIndex){
+  // create hex string for claim value
+  char buffer[INDICE_SIZE];
+  sprintf(buffer, "%08X", EOF_INDEX);
+
+  // overwrite index value with claimvalue
+  int i = 0;
+  for(i = 0; i < INDICE_SIZE; i++){
+    indices[openIndex].data[i] = buffer[i];
+  }
+}
+
+// converts hex to int from indice struct data
+int hexToInt(struct Indices index){
+  char buffer[INDICE_SIZE];
+
+  // store index value in buffer
+  int i = 0;
+  for(i = 0; i < NUM_BLOCKS-1; i++){
+    buffer[i] = index.data[i];
+  }
+
+  buffer[i] = '\0';
+
+  // convert hex chars to int
+  return (int)strtol(buffer, NULL, 16);
 }
 
 void mapFileSystem(struct Blocks ** blocks, struct Indices ** indices){

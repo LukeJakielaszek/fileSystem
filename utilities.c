@@ -1,15 +1,11 @@
 #include <stdio.h>
 #include <time.h>
 
-void createDir(char * dirName);
+void createDir(char * dirName,
+	       struct Indices * indices, struct Blocks * blocks);
 
-int main(){
-  createDir("hello");
-
-  return 0;
-}
-
-void createDir(char * dirName){
+void createDir(char * dirName,
+	       struct Indices * indices, struct Blocks * blocks){
   time_t curTime = time(0);
   printf("%ld\n", curTime);
 

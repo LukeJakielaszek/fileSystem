@@ -1,11 +1,11 @@
 CFLAGS = -g
 
-objects = main.o llist.o utilities.o
+objects = main.o llist.o
 
 fileSystem : $(objects)
 	cc -o fileSystem $(objects) $(CFLAGS)
 
-main.o : llist.h utilities.h
+main.o : llist.h
 
 .PHONY : clean
 clean :
