@@ -55,6 +55,7 @@ struct LFILE * createDir(char * dirName,
 		  struct Indices * indices, struct Blocks * blocks);
 void writeData(int blockIndex, int offset, int curChar, char * data,
 	       struct Blocks * blocks, struct Indices * indices);
+void updateIndex(int indexLocation, int nextIndex, struct Indices * indices);
 
 int main(){
   // check validity of entered parameters
@@ -86,7 +87,9 @@ int main(){
   // creates a filesystem mapping to memory
   mapFileSystem(&blocks, &indices);
 
-  createDir("", indices, blocks);
+  indices[1].data[2] = '3';
+  
+  createDir("ello", indices, blocks);
   return 0;
 }
 
@@ -98,19 +101,40 @@ struct LFILE * createDir(char * dirName,
 
   printf("available block at [%d]\n", open);  
 
-  char * meta = createMeta(FILE_TYPE);
+  char * meta = createMeta(DIRECTORY_TYPE);
 
   printf("[%s]\n", meta);
 
   // checks if root directory
   if(open == 0){
     writeData(open, 0, 0, meta, blocks, indices);
+  }else{
+    
   }
 }
+
+// updates indexLocation to point to next Index 
+void updateIndex(int indexLocation, int nextIndex, struct Indices * indices){
+  // converts nextIndex to hex
+  char buffer[INDICE_SIZE];
+  sprintf(buffer, "%08X", nextIndex);
+
+  // copies nextIndex into indexLocation
+  int i = 0;
+  for(i = 0; i < INDICE_SIZE; i++){
+    indices[indexLocation].data[i] = buffer[i];
+  }
+}
+
 
 // recursively write data to files, getting new block if neccessary
 void writeData(int blockIndex, int offset, int curChar, char * data,
 	       struct Blocks * blocks, struct Indices * indices){
+  if(blockIndex == -1){
+    fprintf(stderr, "ERROR: Disk Full. Unable to fully add [%s]", data);
+    exit(EXIT_FAILURE);
+  }
+  
   int i = 0;
   for(i = 0; curChar <= strlen(data)-1; i++, curChar++){
     if(i+offset >= BLOCK_SIZE && i != 0){
@@ -118,10 +142,15 @@ void writeData(int blockIndex, int offset, int curChar, char * data,
       // find and claim the next open block
       int open = getOpenBlock(indices, blocks);
 
+      // if there is another block available, point to it
+      if(open != -1){
+	updateIndex(blockIndex, open, indices);
+      }
+
+      // conotinue writing data to next block
       writeData(open, 0, curChar, data, blocks, indices);
       break;
     }
-    printf("%d:%d\n", blockIndex, curChar);
 
     // overwrite block char with new data
     blocks[blockIndex].data[i] = data[curChar];
