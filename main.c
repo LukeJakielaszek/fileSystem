@@ -35,6 +35,7 @@ struct Indices{
   char data[INDICE_SIZE];
 };
 
+// file data structure
 struct LFILE{
   int startBlock;
   int curBlock;
@@ -56,6 +57,9 @@ struct LFILE * createDir(char * dirName,
 void writeData(int blockIndex, int offset, int curChar, char * data,
 	       struct Blocks * blocks, struct Indices * indices);
 void updateIndex(int indexLocation, int nextIndex, struct Indices * indices);
+int readData(int blockIndex, int offset, int count, char * buffer,
+	     int buffsize, struct Blocks * blocks, struct Indices * indices);
+//int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks);
 
 int main(){
   // check validity of entered parameters
@@ -87,9 +91,16 @@ int main(){
   // creates a filesystem mapping to memory
   mapFileSystem(&blocks, &indices);
 
-  indices[1].data[2] = '3';
+  createDir("", indices, blocks);
+
+  char str[80] = "/hello/world/boy.txt";
+
+  char * buf = (char*)malloc(sizeof(char)*50);
   
-  createDir("ello", indices, blocks);
+  int count = readData(0,0, 0, buf, 50, blocks, indices);
+
+  printf("%s:%d\n", buf, count);
+  
   return 0;
 }
 
@@ -108,9 +119,83 @@ struct LFILE * createDir(char * dirName,
   // checks if root directory
   if(open == 0){
     writeData(open, 0, 0, meta, blocks, indices);
+  }else if(open == -1){
+    // checks if unable to find next block
+    fprintf(stderr, "ERROR: Disk Full. Unable to create directory [%s]",
+	    dirName);
+    exit(EXIT_FAILURE);
   }else{
-    
+
   }
+}
+
+/*
+// checks if path exists, returns 1 on success 0 on failure
+int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks){
+  // ensures absolute path
+  if(path[0] != '/'){
+    return 0;
+  }
+
+  char delim[2] = "/";
+  char * token;
+  
+  token = strtok(path, delim);
+  
+  while(token != NULL){
+    token = strtok(NULL, delim);
+  }
+
+  return 1;
+}
+
+int getBlock(char * data, int start, struct Indices * indices,
+	     struct Blocks * blocks){
+  int blockIndex = -1;
+  if(){
+
+  }
+}
+*/
+
+// reads data until buffer is full or file ends, returns number of characters
+// read
+int readData(int blockIndex, int offset, int count, char * buffer,
+	      int buffsize, struct Blocks * blocks, struct Indices * indices){
+  // reads data to buffer at char offset
+  int i = offset;
+  for(i = offset; count < buffsize-1; i++, count++){
+    // if block is full
+    if(i >= BLOCK_SIZE){
+      // get value in indice
+      int nextBlock = hexToInt(indices[blockIndex]);
+      
+      // if index was last block in file
+      if(nextBlock == EOF_INDEX){
+	// return total chars read
+	return count;
+      }
+
+      // calculates new offset ensuring it is always >= 0
+      int newOffset = offset - BLOCK_SIZE;
+      if(newOffset < 0){
+      	newOffset = 0;
+      }
+      
+      // continue reading from next block
+      count = readData(nextBlock, newOffset, count, buffer,
+		       buffsize, blocks, indices);
+      break;
+    }
+    // store block char in buffer
+    buffer[count] = blocks[blockIndex].data[i];
+  }
+
+  // add newline to end of buffer
+  buffer[count] = '\0';
+
+  // return total number of chars read
+  return count;
 }
 
 // updates indexLocation to point to next Index 
@@ -130,10 +215,10 @@ void updateIndex(int indexLocation, int nextIndex, struct Indices * indices){
 void writeData(int blockIndex, int offset, int curChar, char * data,
 	       struct Blocks * blocks, struct Indices * indices){
   // writes data to file at char offset
-  int i = 0;
-  for(i = 0; curChar <= strlen(data)-1; i++, curChar++){
+  int i = offset;
+  for(i = offset; curChar < strlen(data); i++, curChar++){
     // if block is full
-    if(i+offset >= BLOCK_SIZE){
+    if(i >= BLOCK_SIZE){
       // get value in indice
       int open = hexToInt(indices[blockIndex]);
       
@@ -143,17 +228,17 @@ void writeData(int blockIndex, int offset, int curChar, char * data,
 	open = getOpenBlock(indices, blocks);
 
 	// if there is another block available, point to it
-	if(open != -1){
-	  updateIndex(blockIndex, open, indices);
-	}else{
-	  // checks if unable to find next block
-	  fprintf(stderr, "ERROR: Disk Full. Unable to fully add [%s]", data);
-	  exit(EXIT_FAILURE);
-	}
+	updateIndex(blockIndex, open, indices);
       }
 
+      // calculates new offset ensuring it is always >= 0
+      int newOffset = offset - BLOCK_SIZE;
+      if(newOffset < 0){
+      	newOffset = 0;
+      }
+      
       // continue writing data to next block
-      writeData(open, 0, curChar, data, blocks, indices);
+      writeData(open, newOffset, curChar, data, blocks, indices);
       break;
     }
 
@@ -196,9 +281,15 @@ int getOpenBlock(struct Indices * indices, struct Blocks * blocks){
     index++;
   }
 
-  // claim available index
-  claimIndex(indices, retIndex);
-
+  if(retIndex != -1){
+    // claim available index
+    claimIndex(indices, retIndex);
+  }else{
+    // checks if unable to find next block
+    fprintf(stderr, "ERROR: Disk Full. Unable to find open index\n");
+    exit(EXIT_FAILURE);
+  }
+  
   // return index location
   return retIndex;
 }
