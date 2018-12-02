@@ -1,3 +1,4 @@
+// standard c libraries
 #include <stdio.h>
 #include <math.h>
 #include <unistd.h>
@@ -7,9 +8,6 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <errno.h>
-
-#include "llist.h"
-//#include "utilities.h"
 
 // filesystem information
 #define DISK_SIZE 100
@@ -32,6 +30,10 @@ struct Blocks{
 struct Indices{
   char data[INDICE_SIZE];
 };
+
+// user-defined libraries
+#include "llist.h"
+#include "utilities.h"
 
 // prototypes
 void createFileSystem();
