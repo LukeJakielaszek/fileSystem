@@ -99,7 +99,7 @@ int main(){
   
   int count = readData(0,0, 0, buf, 50, blocks, indices);
 
-  char path[] = "/dog/fish/trinket";
+  char path[] = "/fish";
   
   createDir(path, indices, blocks);
   
@@ -111,10 +111,21 @@ int main(){
 // create a directory with only meta data, returns 1 on success, 0 on failure
 struct LFILE * createDir(char * dirName,
 			 struct Indices * indices, struct Blocks * blocks){  
+  // ensures something is passed through
   if(strcmp(dirName, "") == 0){
     return 0;
   }
 
+  if(dirName == NULL){
+    return 0;
+  }
+
+  // ensures absolute path
+  if(strcmp(dirName, "/") == 0){
+    return 0;
+  }
+
+  
   // holds processed string
   char *dirpath = (char*)malloc(sizeof(char)*200);
   
