@@ -11,8 +11,8 @@
 #include <time.h>
 
 // filesystem information
-#define DISK_SIZE 600 // size in bytes of filesystem
-#define BLOCK_SIZE 5 // size in bytes of blocks
+#define DISK_SIZE 1200 // size in bytes of filesystem
+#define BLOCK_SIZE 10 // size in bytes of blocks
 #define INDICE_SIZE 8 // size in bytes of index
 #define OPEN_INDEX -1 // indicates unused index location
 #define EOF_INDEX -2 // indicates file ends at index location
@@ -95,13 +95,11 @@ int main(){
   // creates a filesystem mapping to memory
   mapFileSystem(&blocks, &indices);
 
-  char str[80] = "/hello/world/boy.txt";
-
   char * buf = (char*)malloc(sizeof(char)*50);
   
   int count = readData(0,0, 0, buf, 50, blocks, indices);
 
-  char path[] = "/world/bear";
+  char path[] = "/dog/fish/trinket";
   
   createDir(path, indices, blocks);
   
@@ -188,6 +186,8 @@ struct LFILE * createDir(char * dirName,
       char temp[50];
       snprintf(temp, 50, " %d\n", open);      
       strcat(dName, temp);
+
+      printf("dirName [%s]\n", dName);
             
       // add subdirectory to parent
       writeData(dirBlock, offset, 0, dName, blocks, indices);
@@ -279,7 +279,8 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
 	
 	// update block to next block
 	startBlock = atoi(tokenF);
-
+	*dirBlock = startBlock;
+	
 	printf("new start [%d]\n", startBlock);
 	
 	break;
