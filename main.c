@@ -11,7 +11,7 @@
 #include <time.h>
 
 // filesystem information
-#define DISK_SIZE 100 // size in bytes of filesystem
+#define DISK_SIZE 600 // size in bytes of filesystem
 #define BLOCK_SIZE 5 // size in bytes of blocks
 #define INDICE_SIZE 8 // size in bytes of index
 #define OPEN_INDEX -1 // indicates unused index location
@@ -60,7 +60,8 @@ void writeData(int blockIndex, int offset, int curChar, char * data,
 void updateIndex(int indexLocation, int nextIndex, struct Indices * indices);
 int readData(int blockIndex, int offset, int count, char * buffer,
 	     int buffsize, struct Blocks * blocks, struct Indices * indices);
-int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks);
+int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
+		int * dirBlock);
 char * readFile(int startBlock, int offset, struct Blocks * blocks,
 	       struct Indices * indices);
 
@@ -86,7 +87,7 @@ int main(){
   printf("DATA_SIZE %d\n", DATA_SIZE);
 
   // creates a filesystem with allocation array initialized to empty (-1)
-  createFileSystem();
+  //  createFileSystem();
 
   struct Blocks * blocks; // block pointers
   struct Indices * indices; //indice pointers
@@ -100,69 +101,212 @@ int main(){
   
   int count = readData(0,0, 0, buf, 50, blocks, indices);
 
-  char path[] = "/data/isip/luke.txt";
+  char path[] = "/world/bear";
   
-  isPathValid(path, indices, blocks);
-
+  createDir(path, indices, blocks);
+  
   munmap(indices, ALLOC_DISK_SPACE);
   
   return 0;
 }
 
-// create a directory with only meta data
+// create a directory with only meta data, returns 1 on success, 0 on failure
 struct LFILE * createDir(char * dirName,
-			 struct Indices * indices, struct Blocks * blocks){
-  // find and claim the next open block
-  int open = getOpenBlock(indices, blocks);
+			 struct Indices * indices, struct Blocks * blocks){  
+  if(strcmp(dirName, "") == 0){
+    return 0;
+  }
 
-  char * meta = createMeta(DIRECTORY_TYPE);
+  // holds processed string
+  char *dirpath = (char*)malloc(sizeof(char)*200);
+  
+  // copies path over
+  strcpy(dirpath, dirName);
 
-  // checks if root directory
-  if(open == 0){
-    writeData(open, 0, 0, meta, blocks, indices);
-  }else if(open == -1){
-    // checks if unable to find next block
-    fprintf(stderr, "ERROR: Disk Full. Unable to create directory [%s]",
-	    dirName);
-    exit(EXIT_FAILURE);
-  }else{
+  // find name of file from string
+  char * end = strrchr(dirpath, (int)'/');
+
+  // store name
+  char dName[200];
+  strcpy(dName, end+1);
+
+  // remove name from path
+  end[0] = '/';
+  end[1] = '\0';
+
+  int dirBlock = -1;
+  
+  if(isPathValid(dirpath, indices, blocks, &dirBlock)){
+    printf("PATH [%s] is valid\n", dirName);
+
+    // get contents of directory
+    char * contents = readFile(dirBlock, 0, blocks, indices);
+    int offset = strlen(contents);
+
+    // strtok variables
+    char * tokenD;
+    char * tokenL;
+    char * saveD;
+    char * saveL;
+
+    // checks if file name is already in directory
+    tokenD = strtok_r(contents+META_SIZE, "\n", &saveD);
+    while(tokenD != NULL){
+      // get just the name
+      tokenL = strtok_r(tokenD, " ", &saveL);
+
+      // check if name matches name
+      if(strcmp(tokenL, dName) == 0){
+	printf("ERROR: Directory already exists [%s]\n", dirName);
+	return 0;
+      }
+
+      // gets the next name
+      tokenD = strtok_r(NULL, "\n", &saveD);
+    }
+
     
+    // find and claim the next open block
+    int open = getOpenBlock(indices, blocks);
+    
+    char * meta = createMeta(DIRECTORY_TYPE);
+    
+    // checks if root directory
+    if(open == 0){
+      writeData(open, 0, 0, meta, blocks, indices);
+    }else if(open == -1){
+      // checks if unable to find next block
+      fprintf(stderr, "ERROR: Disk Full. Unable to create directory [%s]",
+	      dirName);
+      exit(EXIT_FAILURE);
+    }else{
+      // valid subdirectory/subfile
+      // create new directory
+      writeData(open, 0, 0, meta, blocks, indices);
+
+      // create a formatted listing for new directory
+      char temp[50];
+      snprintf(temp, 50, " %d\n", open);      
+      strcat(dName, temp);
+            
+      // add subdirectory to parent
+      writeData(dirBlock, offset, 0, dName, blocks, indices);
+    }
+  }
+  else{
+    printf("PATH [%s] is invalid\n", dirName);    
+    return 0;
   }
 }
 
 // checks if path exists, returns 1 on success 0 on failure
-int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks){
-  // check if path is empty
+int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
+		int * dirBlock){
+  // check if path is nonexistant
   if(path == NULL){
     return 0;
   }
+
   
+  // check if path is empty
+  if(strcmp(path,"") == 0){
+    return 0;
+  }
+
   // ensures absolute path
   if(path[0] != '/'){
     return 0;
   }
-
-  char delim[] = "/";
-  char * token;
-
-  int startBlock = 0;
-  int offset = 0;
-
-  char * total = readFile(startBlock, offset, blocks, indices);
-
-  printf("[%s]\n", total);
   
-  /*
-  token = strtok(path, delim);
-
-  while(token != NULL){
-    printf("%s\n", token);
-    token = strtok(NULL, delim);
+  if(path[0] == '/' && strlen(path) == 1){
+    *dirBlock = 0;
+    return 1;
   }
-  */
+
+  
+  int startBlock = 0;
+  int offset = META_SIZE;
+
+  char * total;
+
+  char delimP[] = "/";
+  char delimD[] = "\n";
+  char delimF[] = " ";
+  char * tokenP;
+  char * tokenD;
+  char * tokenF;
+  char * saveP;
+  char * saveD;
+  char * saveF;
+
+  printf("path [%s]\n", path);
+  
+  // get first path directory
+  tokenP = strtok_r(path, delimP, &saveP);
+
+  printf("first pathdir [%s]\n", tokenP);
+
+  // loop until finished checking path
+  while(tokenP != NULL){
+    // read directory contents
+    total = readFile(startBlock, offset, blocks, indices);
+
+    if(strcmp(total, "") == 0){
+      return 0;
+    }
+    
+    printf("dircontents: [%s]\n", total);  
+
+    // get first directory listing "dirname fileNumber"
+    tokenD = strtok_r(total, delimD, &saveD);
+
+    printf("dirlist: [%s]\n", tokenD);  
+
+    
+    // loop through directory entry
+    while(tokenD != NULL){
+      // get file name
+      tokenF = strtok_r(tokenD, delimF, &saveF);
+
+      printf("true dirname [%s]\n", tokenF);
+      
+      // if filename in directory matches path name
+      if(strcmp(tokenF, tokenP) == 0){
+	// get file number
+	tokenF = strtok_r(NULL, delimF, &saveF);
+
+	printf("dir number [%s]\n", tokenF);
+	
+	// update block to next block
+	startBlock = atoi(tokenF);
+
+	printf("new start [%d]\n", startBlock);
+	
+	break;
+      }
+      
+      // get next subdirectory name
+      tokenD = strtok_r(NULL, delimD, &saveP);
+      printf("tokenD [%s]\n", tokenD);
+      
+      if(tokenD == NULL){
+	return 0;
+      }
+    }
+
+    // get next directory in path
+    tokenP = strtok_r(NULL, delimP, &saveP);
+    printf("next [%s]\n", tokenP);
+  }
+
+  if(startBlock == 0){
+    return 0;
+  }
+  
   return 1;
 }
 
+// returns all chars read
 char * readFile(int startBlock, int offset, struct Blocks * blocks,
 	       struct Indices * indices){
   // temporary buffer for reading sections
@@ -434,7 +578,7 @@ void createFileSystem(){
   // creates a filesystem mapping to memory
   mapFileSystem(&blocks, &indices);
 
-  createDir("", indices, blocks);
+  createDir("/home", indices, blocks);
 
   // unmap filesystem
   munmap(indices, ALLOC_DISK_SPACE);
