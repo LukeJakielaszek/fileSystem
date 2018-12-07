@@ -53,7 +53,7 @@ int getOpenBlock(struct Indices * indices, struct Blocks * blocks);
 int hexToInt(struct Indices index);
 void claimIndex(struct Indices * indices, int openIndex);
 char * createMeta(char type);
-struct LFILE * createDir(char * dirName,
+struct LFILE * createFile(char * dirName, int fileType,
 		  struct Indices * indices, struct Blocks * blocks);
 void writeData(int blockIndex, int offset, int curChar, char * data,
 	       struct Blocks * blocks, struct Indices * indices);
@@ -99,17 +99,22 @@ int main(){
   
   int count = readData(0,0, 0, buf, 50, blocks, indices);
 
-  char path[] = "/fish";
+  char path[] = "/mouse/dog";
   
-  createDir(path, indices, blocks);
+  createFile(path, FILE_TYPE, indices, blocks);
+
+  // get contents of directory
+  //  char * contents = readFile(3, 0, blocks, indices);
+  //printf("contents [%s]\n", contents);
   
   munmap(indices, ALLOC_DISK_SPACE);
   
   return 0;
 }
 
-// create a directory with only meta data, returns 1 on success, 0 on failure
-struct LFILE * createDir(char * dirName,
+// create a file of desired type with only meta data,
+// returns 1 on success, 0 on failure
+struct LFILE * createFile(char * dirName, int fileType,
 			 struct Indices * indices, struct Blocks * blocks){  
   // ensures something is passed through
   if(strcmp(dirName, "") == 0){
@@ -178,7 +183,7 @@ struct LFILE * createDir(char * dirName,
     // find and claim the next open block
     int open = getOpenBlock(indices, blocks);
     
-    char * meta = createMeta(DIRECTORY_TYPE);
+    char * meta = createMeta(fileType);
     
     // checks if root directory
     if(open == 0){
@@ -195,15 +200,15 @@ struct LFILE * createDir(char * dirName,
 
       // create a formatted listing for new directory
       char temp[50];
-      snprintf(temp, 50, " %d\n", open);      
+      snprintf(temp, 50, " %d\n%c", open, EOF_CHAR);      
       strcat(dName, temp);
 
       printf("dirName [%s]\n", dName);
-            
+
       // add subdirectory to parent
       writeData(dirBlock, offset, 0, dName, blocks, indices);
     }
-  }
+  } 
   else{
     printf("PATH [%s] is invalid\n", dirName);    
     return 0;
@@ -217,7 +222,6 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
   if(path == NULL){
     return 0;
   }
-
   
   // check if path is empty
   if(strcmp(path,"") == 0){
@@ -233,7 +237,6 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
     *dirBlock = 0;
     return 1;
   }
-
   
   int startBlock = 0;
   int offset = META_SIZE;
@@ -250,12 +253,8 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
   char * saveD;
   char * saveF;
 
-  printf("path [%s]\n", path);
-  
   // get first path directory
   tokenP = strtok_r(path, delimP, &saveP);
-
-  printf("first pathdir [%s]\n", tokenP);
 
   // loop until finished checking path
   while(tokenP != NULL){
@@ -266,41 +265,37 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
       return 0;
     }
     
-    printf("dircontents: [%s]\n", total);  
-
     // get first directory listing "dirname fileNumber"
     tokenD = strtok_r(total, delimD, &saveD);
 
-    printf("dirlist: [%s]\n", tokenD);  
-
-    
     // loop through directory entry
     while(tokenD != NULL){
       // get file name
       tokenF = strtok_r(tokenD, delimF, &saveF);
 
-      printf("true dirname [%s]\n", tokenF);
-      
       // if filename in directory matches path name
       if(strcmp(tokenF, tokenP) == 0){
 	// get file number
 	tokenF = strtok_r(NULL, delimF, &saveF);
-
-	printf("dir number [%s]\n", tokenF);
 	
 	// update block to next block
 	startBlock = atoi(tokenF);
 	*dirBlock = startBlock;
-	
-	printf("new start [%d]\n", startBlock);
+
+	// get contents of directory
+	char * contents = readFile(startBlock, 0, blocks, indices);
+
+	// ensure it is a directory
+	if(contents[META_SIZE-1] != 'D'){
+	  return 0;
+	}
 	
 	break;
       }
       
       // get next subdirectory name
       tokenD = strtok_r(NULL, delimD, &saveP);
-      printf("tokenD [%s]\n", tokenD);
-      
+
       if(tokenD == NULL){
 	return 0;
       }
@@ -308,7 +303,6 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
 
     // get next directory in path
     tokenP = strtok_r(NULL, delimP, &saveP);
-    printf("next [%s]\n", tokenP);
   }
 
   if(startBlock == 0){
@@ -590,7 +584,7 @@ void createFileSystem(){
   // creates a filesystem mapping to memory
   mapFileSystem(&blocks, &indices);
 
-  createDir("/home", indices, blocks);
+  createFile("/home", DIRECTORY_TYPE, indices, blocks);
 
   // unmap filesystem
   munmap(indices, ALLOC_DISK_SPACE);
