@@ -22,7 +22,6 @@
 #define META_SIZE 21 // size in bytes of meta section
 #define WRITE 1 // mode to truncate and write to a file
 #define READ 2 // mode to read a file
-#define APPEND 3 // mode to append txt to a file
 int INDEX_SIZE; // size of index to represent all of memory 
 int DATA_SIZE; // size of memory excluding index
 int NUM_BLOCKS; // number of blocks within the data section
@@ -69,6 +68,10 @@ char * readFile(int startBlock, int offset, struct Blocks * blocks,
 	       struct Indices * indices);
 int openFile(char * filePath, int mode, struct LFILE ** file,
 	     struct Indices * indices, struct Blocks * blocks);
+int writeLFile(char * data, struct LFILE * file,
+	       struct Indices * indices, struct Blocks * blocks);
+int readLFile(char * buffer, int buffsize, struct LFILE * file,
+	      struct Indices * indices, struct Blocks * blocks);
 
 int main(){
   // check validity of entered parameters
@@ -92,7 +95,7 @@ int main(){
   printf("DATA_SIZE %d\n", DATA_SIZE);
 
   // creates a filesystem with allocation array initialized to empty (-1)
-  //  createFileSystem();
+  //createFileSystem();
 
   struct Blocks * blocks; // block pointers
   struct Indices * indices; //indice pointers
@@ -100,28 +103,88 @@ int main(){
   // creates a filesystem mapping to memory
   mapFileSystem(&blocks, &indices);
 
-  char * buf = (char*)malloc(sizeof(char)*50);
-  
-  int count = readData(0,0, 0, buf, 50, blocks, indices);
-
-  char path[] = "/mouse";
+  char path[] = "/spider/dog/goose";
   
   //  createFile(path, FILE_TYPE, indices, blocks);
-
-  // get contents of directory
-  //  char * contents = readFile(6, 0, blocks, indices);
-  //printf("contents : \n[%s]\n", contents);
-
+  
   struct LFILE * file;
 
-  if(openFile("/mouse/zebra.txt", READ, &file, indices, blocks)){
+  if(openFile("/spider/dog/goose", READ, &file, indices, blocks)){
     printf("block %d, offset : %d, mode %d, meta [%s]\n",
     	   file->startBlock, file->offset, file->mode, file->meta);
   }
+
+  /*  char text[50] = "mouse";
   
+  writeLFile(text, file, indices, blocks);
+
+  char tst[50] = "humpback whale";
+  
+  writeLFile(tst, file, indices, blocks);
+
+  writeLFile(text, file, indices, blocks);
+  writeLFile(text, file, indices, blocks);
+  writeLFile(text, file, indices, blocks);
+  */
+
+  int buffsize = 10;
+  char * buf = (char*)malloc(sizeof(char)*buffsize);
+
+  int count = readLFile(buf, buffsize, file, indices, blocks);
+  
+  while(count > 0){
+    printf("offset %d : [%s]\n", file->offset, buf);
+    count = readLFile(buf, buffsize, file, indices, blocks);
+  }
+
+  printf("offset %d : [%s]\n", file->offset, buf);
+ 
+  // get contents of directory
+  char * contents = readFile(20, 0, blocks, indices);
+  printf("contents : \n[%s]\n", contents);
+
   munmap(indices, ALLOC_DISK_SPACE);
   
   return 0;
+}
+
+// read data from file, returns number of bytes read
+int readLFile(char * buffer, int buffsize, struct LFILE * file,
+	       struct Indices * indices, struct Blocks * blocks){
+  // check for correct mode
+  if(file->mode != READ){
+    printf("ERROR: Invalid file mode [%d]\n", file->mode);
+    return 0;
+  }
+
+  // read from file
+  int count = readData(file->startBlock, file->offset, 0, buffer, buffsize,
+			   blocks, indices);
+
+  // increment offset
+  file->offset += count;
+
+  // return bytes read
+  return count;
+}
+
+// write data to file, return -1 if fail, otherwise the number of chars written
+int writeLFile(char * data, struct LFILE * file,
+	       struct Indices * indices, struct Blocks * blocks){
+  // check for correct mode
+  if(file->mode != WRITE){
+    printf("ERROR: Invalid file mode [%d]\n", file->mode);
+    return -1;
+  }
+
+  // write data
+  writeData(file->startBlock, file->offset, 0, data, blocks, indices);
+
+  // increment offset
+  file->offset += strlen(data);
+
+  // return number of chars written
+  return strlen(data);
 }
 
 // opens a file in a mode, returns 0 on failure or 1 and a populated struct on
@@ -226,7 +289,7 @@ int createFile(char * dirName, int fileType,
   }
 
   if(dirName == NULL){
-    printf("ERROR: Path [%s] is an invalid pathd", dirName);    	
+    printf("ERROR: Path [%s] is an invalid path\n", dirName);    	
     return 0;
   }
 
@@ -452,7 +515,7 @@ char * readFile(int startBlock, int offset, struct Blocks * blocks,
   }while(count == buffsize-1);
 
   free(buffer);
-  
+
   return total;
 }
 
@@ -463,11 +526,6 @@ int readData(int blockIndex, int offset, int count, char * buffer,
   // reads data to buffer at char offset
   int i = offset;
   for(i = offset; count < buffsize-1; i++, count++){
-    // if hit end of file
-    if(blocks[blockIndex].data[i] == EOF_CHAR){
-      break;
-    }
-    
     // if block is full
     if(i >= BLOCK_SIZE){
       // get value in indice
@@ -490,6 +548,12 @@ int readData(int blockIndex, int offset, int count, char * buffer,
 		       buffsize, blocks, indices);
       break;
     }
+
+    // if hit end of file
+    if(blocks[blockIndex].data[i] == EOF_CHAR){
+      break;
+    }
+    
     // store block char in buffer
     buffer[count] = blocks[blockIndex].data[i];
   }
