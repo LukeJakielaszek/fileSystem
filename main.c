@@ -20,6 +20,9 @@
 #define FILE_TYPE 70 // signifies file is a file F:70
 #define DIRECTORY_TYPE 68 // signifies file is a dir D:68
 #define META_SIZE 21 // size in bytes of meta section
+#define WRITE 1 // mode to truncate and write to a file
+#define READ 2 // mode to read a file
+#define APPEND 3 // mode to append txt to a file
 int INDEX_SIZE; // size of index to represent all of memory 
 int DATA_SIZE; // size of memory excluding index
 int NUM_BLOCKS; // number of blocks within the data section
@@ -39,9 +42,9 @@ struct Indices{
 // file data structure
 struct LFILE{
   int startBlock;
-  int curBlock;
-  int offSet;
-  int parentBlock;
+  int offset;
+  char meta[META_SIZE];
+  int mode;
 };
 
 // prototypes
@@ -53,7 +56,7 @@ int getOpenBlock(struct Indices * indices, struct Blocks * blocks);
 int hexToInt(struct Indices index);
 void claimIndex(struct Indices * indices, int openIndex);
 char * createMeta(char type);
-struct LFILE * createFile(char * dirName, int fileType,
+int createFile(char * dirName, int fileType,
 		  struct Indices * indices, struct Blocks * blocks);
 void writeData(int blockIndex, int offset, int curChar, char * data,
 	       struct Blocks * blocks, struct Indices * indices);
@@ -64,6 +67,8 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
 		int * dirBlock);
 char * readFile(int startBlock, int offset, struct Blocks * blocks,
 	       struct Indices * indices);
+int openFile(char * filePath, int mode, struct LFILE ** file,
+	     struct Indices * indices, struct Blocks * blocks);
 
 int main(){
   // check validity of entered parameters
@@ -99,37 +104,137 @@ int main(){
   
   int count = readData(0,0, 0, buf, 50, blocks, indices);
 
-  char path[] = "/mouse/dog";
+  char path[] = "/mouse";
   
-  createFile(path, FILE_TYPE, indices, blocks);
+  //  createFile(path, FILE_TYPE, indices, blocks);
 
   // get contents of directory
-  //  char * contents = readFile(3, 0, blocks, indices);
-  //printf("contents [%s]\n", contents);
+  //  char * contents = readFile(6, 0, blocks, indices);
+  //printf("contents : \n[%s]\n", contents);
+
+  struct LFILE * file;
+
+  if(openFile("/mouse/zebra.txt", READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+  }
   
   munmap(indices, ALLOC_DISK_SPACE);
   
   return 0;
 }
 
+// opens a file in a mode, returns 0 on failure or 1 and a populated struct on
+// success
+int openFile(char * filePath, int mode, struct LFILE ** file,
+	     struct Indices * indices, struct Blocks * blocks){
+  // ensures something is passed through
+  if(strcmp(filePath, "") == 0){
+    return 0;
+  }
+
+  if(filePath == NULL){
+    return 0;
+  }
+
+  // ensures absolute path
+  if(strcmp(filePath, "/") == 0){
+    return 0;
+  }
+  
+  // holds processed string
+  char *dirpath = (char*)malloc(sizeof(char)*200);
+  
+  // copies path over
+  strcpy(dirpath, filePath);
+
+  // find name of file from string
+  char * end = strrchr(dirpath, (int)'/');
+
+  // store name
+  char fName[200];
+  strcpy(fName, end+1);
+
+  // remove name from path
+  end[0] = '/';
+  end[1] = '\0';
+
+  int fileBlock = -1;
+
+  // checks if path is valid and retrieves block location of file
+  if(isPathValid(dirpath, indices, blocks, &fileBlock)){
+    // get contents of directory
+    char * contents = readFile(fileBlock, 0, blocks, indices);
+    int offset = strlen(contents);
+
+    // strtok variables
+    char * tokenD;
+    char * tokenL;
+    char * saveD;
+    char * saveL;
+
+    // check if file name is in directory
+    tokenD = strtok_r(contents+META_SIZE, "\n", &saveD);
+    while(tokenD != NULL){
+      // get just the name
+      tokenL = strtok_r(tokenD, " ", &saveL);
+
+      // check if name matches name
+      if(strcmp(tokenL, fName) == 0){
+	fileBlock = atoi(strtok_r(NULL, " ", &saveL));
+
+	free(contents);
+	
+	contents = readFile(fileBlock, 0, blocks, indices);
+	if(contents[META_SIZE-1] != FILE_TYPE){
+	  free(contents);
+	  return 0;
+	}
+
+	free(contents);
+
+	// file struct
+	*file = (struct LFILE *)malloc(sizeof(struct LFILE));
+	
+	(*file)->startBlock = fileBlock;
+	(*file)->offset = META_SIZE;
+	(*file)->mode = mode;
+	readData(fileBlock, 0, 0, (*file)->meta, META_SIZE+1, blocks, indices);
+
+	return 1;
+      }
+      // gets the next name
+      tokenD = strtok_r(NULL, "\n", &saveD);
+    }
+  }else{
+    printf("ERROR: Failed to find file [%s]\n", filePath);
+    // failure to find file
+    return 0;
+  }
+
+  return 0;
+}
+
 // create a file of desired type with only meta data,
 // returns 1 on success, 0 on failure
-struct LFILE * createFile(char * dirName, int fileType,
+int createFile(char * dirName, int fileType,
 			 struct Indices * indices, struct Blocks * blocks){  
   // ensures something is passed through
   if(strcmp(dirName, "") == 0){
+    printf("ERROR: Path [%s] is an invalid path\n", dirName);    
     return 0;
   }
 
   if(dirName == NULL){
+    printf("ERROR: Path [%s] is an invalid pathd", dirName);    	
     return 0;
   }
 
   // ensures absolute path
   if(strcmp(dirName, "/") == 0){
+    printf("ERROR: Path [%s] is an invalid path\n", dirName);    
     return 0;
   }
-
   
   // holds processed string
   char *dirpath = (char*)malloc(sizeof(char)*200);
@@ -149,10 +254,8 @@ struct LFILE * createFile(char * dirName, int fileType,
   end[1] = '\0';
 
   int dirBlock = -1;
-  
-  if(isPathValid(dirpath, indices, blocks, &dirBlock)){
-    printf("PATH [%s] is valid\n", dirName);
 
+  if(isPathValid(dirpath, indices, blocks, &dirBlock)){
     // get contents of directory
     char * contents = readFile(dirBlock, 0, blocks, indices);
     int offset = strlen(contents);
@@ -179,6 +282,7 @@ struct LFILE * createFile(char * dirName, int fileType,
       tokenD = strtok_r(NULL, "\n", &saveD);
     }
 
+    printf("Path [%s] is a valid path\n", dirName);
     
     // find and claim the next open block
     int open = getOpenBlock(indices, blocks);
@@ -203,14 +307,12 @@ struct LFILE * createFile(char * dirName, int fileType,
       snprintf(temp, 50, " %d\n%c", open, EOF_CHAR);      
       strcat(dName, temp);
 
-      printf("dirName [%s]\n", dName);
-
       // add subdirectory to parent
       writeData(dirBlock, offset, 0, dName, blocks, indices);
     }
   } 
   else{
-    printf("PATH [%s] is invalid\n", dirName);    
+    printf("ERROR: Path [%s] is an invalid path\n", dirName);    
     return 0;
   }
 }
@@ -220,16 +322,19 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
 		int * dirBlock){
   // check if path is nonexistant
   if(path == NULL){
+    printf("Path is Null\n");
     return 0;
   }
   
   // check if path is empty
   if(strcmp(path,"") == 0){
+    printf("Path is empty\n");
     return 0;
   }
 
   // ensures absolute path
   if(path[0] != '/'){
+    printf("Path is not absolute\n");
     return 0;
   }
   
@@ -260,7 +365,7 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
   while(tokenP != NULL){
     // read directory contents
     total = readFile(startBlock, offset, blocks, indices);
-
+    
     if(strcmp(total, "") == 0){
       return 0;
     }
@@ -287,15 +392,17 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
 
 	// ensure it is a directory
 	if(contents[META_SIZE-1] != 'D'){
+	  free(contents);
 	  return 0;
 	}
 	
+	free(contents);
 	break;
       }
       
       // get next subdirectory name
-      tokenD = strtok_r(NULL, delimD, &saveP);
-
+      tokenD = strtok_r(NULL, delimD, &saveD);
+      
       if(tokenD == NULL){
 	return 0;
       }
