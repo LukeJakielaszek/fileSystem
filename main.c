@@ -72,6 +72,7 @@ int writeLFile(char * data, struct LFILE * file,
 	       struct Indices * indices, struct Blocks * blocks);
 int readLFile(char * buffer, int buffsize, struct LFILE * file,
 	      struct Indices * indices, struct Blocks * blocks);
+void closeLFile(struct LFILE * file);
 
 int main(){
   // check validity of entered parameters
@@ -109,12 +110,12 @@ int main(){
   
   struct LFILE * file;
 
-  if(openFile("/spider/dog/goose", READ, &file, indices, blocks)){
+  if(openFile("/spider/dog/goose", WRITE, &file, indices, blocks)){
     printf("block %d, offset : %d, mode %d, meta [%s]\n",
     	   file->startBlock, file->offset, file->mode, file->meta);
   }
 
-  /*  char text[50] = "mouse";
+  char text[50] = "mouse";
   
   writeLFile(text, file, indices, blocks);
 
@@ -125,27 +126,34 @@ int main(){
   writeLFile(text, file, indices, blocks);
   writeLFile(text, file, indices, blocks);
   writeLFile(text, file, indices, blocks);
-  */
 
   int buffsize = 10;
   char * buf = (char*)malloc(sizeof(char)*buffsize);
 
-  int count = readLFile(buf, buffsize, file, indices, blocks);
+  /* int count = readLFile(buf, buffsize, file, indices, blocks);
   
   while(count > 0){
     printf("offset %d : [%s]\n", file->offset, buf);
     count = readLFile(buf, buffsize, file, indices, blocks);
-  }
+    }
 
   printf("offset %d : [%s]\n", file->offset, buf);
- 
+  */  
+
   // get contents of directory
   char * contents = readFile(20, 0, blocks, indices);
   printf("contents : \n[%s]\n", contents);
 
+  closeLFile(file);
+  
   munmap(indices, ALLOC_DISK_SPACE);
   
   return 0;
+}
+
+// free malloced file
+void closeLFile(struct LFILE * file){
+  free(file);
 }
 
 // read data from file, returns number of bytes read
@@ -183,6 +191,11 @@ int writeLFile(char * data, struct LFILE * file,
   // increment offset
   file->offset += strlen(data);
 
+  // update file meta information
+  char *meta = createMeta(FILE_TYPE);
+  strcpy(file->meta, meta);
+  writeData(file->startBlock, 0, 0, meta, blocks, indices);
+  
   // return number of chars written
   return strlen(data);
 }
