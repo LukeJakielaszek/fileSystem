@@ -73,6 +73,8 @@ int writeLFile(char * data, struct LFILE * file,
 int readLFile(char * buffer, int buffsize, struct LFILE * file,
 	      struct Indices * indices, struct Blocks * blocks);
 void closeLFile(struct LFILE * file);
+int deleteFile(char * dirName,
+		struct Indices * indices, struct Blocks * blocks);
 
 int main(){
   // check validity of entered parameters
@@ -96,7 +98,7 @@ int main(){
   printf("DATA_SIZE %d\n", DATA_SIZE);
 
   // creates a filesystem with allocation array initialized to empty (-1)
-  //createFileSystem();
+  //  createFileSystem();
 
   struct Blocks * blocks; // block pointers
   struct Indices * indices; //indice pointers
@@ -104,13 +106,13 @@ int main(){
   // creates a filesystem mapping to memory
   mapFileSystem(&blocks, &indices);
 
-  char path[] = "/spider/dog/goose";
+  char path[] = "/my/man";
   
-  //  createFile(path, FILE_TYPE, indices, blocks);
+  //  createFile(path, DIRECTORY_TYPE, indices, blocks);
   
   struct LFILE * file;
-
-  if(openFile("/spider/dog/goose", WRITE, &file, indices, blocks)){
+  /*
+  if(openFile("/cat/hat", WRITE, &file, indices, blocks)){
     printf("block %d, offset : %d, mode %d, meta [%s]\n",
     	   file->startBlock, file->offset, file->mode, file->meta);
   }
@@ -126,11 +128,11 @@ int main(){
   writeLFile(text, file, indices, blocks);
   writeLFile(text, file, indices, blocks);
   writeLFile(text, file, indices, blocks);
-
+ 
   int buffsize = 10;
   char * buf = (char*)malloc(sizeof(char)*buffsize);
 
-  /* int count = readLFile(buf, buffsize, file, indices, blocks);
+  int count = readLFile(buf, buffsize, file, indices, blocks);
   
   while(count > 0){
     printf("offset %d : [%s]\n", file->offset, buf);
@@ -140,15 +142,174 @@ int main(){
   printf("offset %d : [%s]\n", file->offset, buf);
   */  
 
-  // get contents of directory
-  char * contents = readFile(20, 0, blocks, indices);
-  printf("contents : \n[%s]\n", contents);
+  //closeLFile(file);
 
-  closeLFile(file);
+  //  deleteFile("/", indices, blocks);
+
+  // get contents of directory
+  char * contents = readFile(9, 0, blocks, indices);
+  printf("contents : \n[%s]\n", contents);
   
   munmap(indices, ALLOC_DISK_SPACE);
   
   return 0;
+}
+
+// deletes file from directory structure. Returns 1 on success, 0 on failure.
+// Directories are required to be empty
+int deleteFile(char * dirName,
+		struct Indices * indices, struct Blocks * blocks){  
+  // ensures something is passed through
+  if(strcmp(dirName, "") == 0){
+    printf("ERROR: Path [%s] is an invalid path\n", dirName);    
+    return 0;
+  }
+
+  if(dirName == NULL){
+    printf("ERROR: Path [%s] is an invalid path\n", dirName);    	
+    return 0;
+  }
+
+  // checks if user attempts to remove root
+  if(strcmp(dirName, "/") == 0){
+    printf("ERROR: Unable to delete root directory\n");    
+    return 0;
+  }
+  
+  // holds processed string
+  char *dirpath = (char*)malloc(sizeof(char)*200);
+  
+  // copies path over
+  strcpy(dirpath, dirName);
+
+  // find name of file from string
+  char * end = strrchr(dirpath, (int)'/');
+
+  // store name
+  char dName[200];
+  strcpy(dName, end+1);
+
+  // remove name from path
+  end[0] = '/';
+  end[1] = '\0';
+
+  printf("dname [%s]\n", dName);
+  printf("dirpath [%s]\n", dirpath);
+
+  int dirBlock = -1;
+
+  int fileNum = -1;
+  if(isPathValid(dirpath, indices, blocks, &dirBlock)){
+    printf("dirBlock %d\n", dirBlock);
+    
+    // get contents of directory
+    char * contents = readFile(dirBlock, 0, blocks, indices);
+    int offset = strlen(contents);
+
+    // strtok variables
+    char * tokenD;
+    char * tokenL;
+    char * saveD;
+    char * saveL;
+
+    // checks if file name is already in directory
+    tokenD = strtok_r(contents+META_SIZE, "\n", &saveD);
+    while(tokenD != NULL){
+      // get just the name
+      tokenL = strtok_r(tokenD, " ", &saveL);
+
+      // check if name matches name
+      if(strcmp(tokenL, dName) == 0){
+	tokenL = strtok_r(NULL, " ", &saveL);
+
+	// store file location
+	fileNum = atoi(tokenL);
+	break;
+      }
+
+      // gets the next name
+      tokenD = strtok_r(NULL, "\n", &saveD);
+    }
+
+    // ensure everything is correctly found
+    if(dirBlock == -1 || fileNum == -1){
+      printf("ERROR: Path [%s] is an invalid path\n", dirName);      
+      return 0;
+    }
+
+    // temporary buffer for reading sections
+    int buffsize = 50;
+    char * bufferC = (char*)malloc(sizeof(char)*buffsize);
+
+    readData(fileNum, 0, 0, bufferC, buffsize,
+    	     blocks, indices);
+
+    // check if it is a directory and has subfiles in it
+    if(bufferC[META_SIZE-1] == DIRECTORY_TYPE && strlen(bufferC) > META_SIZE){
+      printf("ERROR: Unable to delete non-empty directories.\n");
+      free(bufferC);
+      
+      return 0;
+    }
+
+    free(bufferC);
+
+    // create hex string for open value
+    char buffer[INDICE_SIZE];
+    sprintf(buffer, "%08X", OPEN_INDEX);
+
+    int next = hexToInt(indices[fileNum]);
+    // free up index
+    while(next != EOF_INDEX){
+      // overwrite index value with openvalue
+      int i = 0;
+      for(i = 0; i < INDICE_SIZE; i++){
+	indices[fileNum].data[i] = buffer[i];
+      }
+
+      // increment to next index of file
+      fileNum = next;
+      next = hexToInt(indices[fileNum]);
+    }
+
+    // remove final index associated with file
+    int i = 0;
+    for(i = 0; i < INDICE_SIZE; i++){
+      indices[fileNum].data[i] = buffer[i];
+    }
+    
+    // update parent directory
+    char * dirContents = readFile(dirBlock, 0, blocks, indices);
+    
+    // find file in directory listing and prep to slice it out
+    char * fileStart = strstr(dirContents, dName);
+
+    char * fileEnd = strstr(fileStart, "\n");
+    fileStart[0] = '\0';
+    fileEnd++;
+    char * newDir = (char*)malloc(sizeof(char)*(1+strlen(fileStart) + strlen(fileEnd)));
+    newDir[0]='\0';
+
+    // remove file from directory listing
+    strcat(newDir, dirContents);
+    strcat(newDir, fileEnd);
+
+    newDir[strlen(newDir)] = EOF_CHAR;
+    
+    // write new directory listing
+    writeData(dirBlock, 0, 0, newDir, blocks, indices);
+
+    // update file meta information
+    char *meta = createMeta(DIRECTORY_TYPE);
+    writeData(dirBlock, 0, 0, meta, blocks, indices);
+
+    free(meta);
+    free(newDir);
+    free(dirContents);
+  }else{
+    printf("ERROR: Path [%s] is an invalid path\n", dirName);    
+    return 0;
+  }
 }
 
 // free malloced file
@@ -536,6 +697,11 @@ char * readFile(int startBlock, int offset, struct Blocks * blocks,
 // read
 int readData(int blockIndex, int offset, int count, char * buffer,
 	      int buffsize, struct Blocks * blocks, struct Indices * indices){
+  if(hexToInt(indices[blockIndex]) == OPEN_INDEX){
+    printf("Invalid memory location\n");
+    return 0;
+  }
+  
   // reads data to buffer at char offset
   int i = offset;
   for(i = offset; count < buffsize-1; i++, count++){
