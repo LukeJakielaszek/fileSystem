@@ -11,8 +11,8 @@
 #include <time.h>
 
 // filesystem information
-#define DISK_SIZE 1200 // size in bytes of filesystem
-#define BLOCK_SIZE 10 // size in bytes of blocks
+#define DISK_SIZE 100000 // size in bytes of filesystem
+#define BLOCK_SIZE 512 // size in bytes of blocks
 #define INDICE_SIZE 8 // size in bytes of index
 #define OPEN_INDEX -1 // indicates unused index location
 #define EOF_INDEX -2 // indicates file ends at index location
@@ -106,30 +106,32 @@ int main(){
   // creates a filesystem mapping to memory
   mapFileSystem(&blocks, &indices);
 
-  char path[] = "/my/man";
+  char path[] = "/bluehornpalace";
   
-  //  createFile(path, DIRECTORY_TYPE, indices, blocks);
+  createFile(path, DIRECTORY_TYPE, indices, blocks);
   
   struct LFILE * file;
+
   /*
-  if(openFile("/cat/hat", WRITE, &file, indices, blocks)){
+  if(openFile("/boysintheClub/bobbyjoemanbear", WRITE, &file, indices, blocks)){
     printf("block %d, offset : %d, mode %d, meta [%s]\n",
     	   file->startBlock, file->offset, file->mode, file->meta);
   }
-
+  */
+  /*  
   char text[50] = "mouse";
   
   writeLFile(text, file, indices, blocks);
-
+  
   char tst[50] = "humpback whale";
   
   writeLFile(tst, file, indices, blocks);
-
   writeLFile(text, file, indices, blocks);
   writeLFile(text, file, indices, blocks);
   writeLFile(text, file, indices, blocks);
- 
-  int buffsize = 10;
+  */
+  
+  /*int buffsize = 10;
   char * buf = (char*)malloc(sizeof(char)*buffsize);
 
   int count = readLFile(buf, buffsize, file, indices, blocks);
@@ -137,21 +139,22 @@ int main(){
   while(count > 0){
     printf("offset %d : [%s]\n", file->offset, buf);
     count = readLFile(buf, buffsize, file, indices, blocks);
-    }
+  }
 
   printf("offset %d : [%s]\n", file->offset, buf);
-  */  
-
-  //closeLFile(file);
-
-  //  deleteFile("/", indices, blocks);
-
+  */
+  
   // get contents of directory
-  char * contents = readFile(9, 0, blocks, indices);
+  
+  char * contents = readFile(0, 0, blocks, indices);
   printf("contents : \n[%s]\n", contents);
   
+  //  closeLFile(file);
+
+  deleteFile("/boysintheClub", indices, blocks);
+
   munmap(indices, ALLOC_DISK_SPACE);
-  
+    
   return 0;
 }
 
@@ -193,14 +196,10 @@ int deleteFile(char * dirName,
   end[0] = '/';
   end[1] = '\0';
 
-  printf("dname [%s]\n", dName);
-  printf("dirpath [%s]\n", dirpath);
-
   int dirBlock = -1;
 
   int fileNum = -1;
   if(isPathValid(dirpath, indices, blocks, &dirBlock)){
-    printf("dirBlock %d\n", dirBlock);
     
     // get contents of directory
     char * contents = readFile(dirBlock, 0, blocks, indices);
@@ -353,7 +352,7 @@ int writeLFile(char * data, struct LFILE * file,
   file->offset += strlen(data);
 
   // update file meta information
-  char *meta = createMeta(FILE_TYPE);
+  char *meta = createMeta(file->meta[META_SIZE-1]);
   strcpy(file->meta, meta);
   writeData(file->startBlock, 0, 0, meta, blocks, indices);
   
@@ -421,7 +420,8 @@ int openFile(char * filePath, int mode, struct LFILE ** file,
 	fileBlock = atoi(strtok_r(NULL, " ", &saveL));
 
 	free(contents);
-	
+
+	/*
 	contents = readFile(fileBlock, 0, blocks, indices);
 	if(contents[META_SIZE-1] != FILE_TYPE){
 	  free(contents);
@@ -429,7 +429,8 @@ int openFile(char * filePath, int mode, struct LFILE ** file,
 	}
 
 	free(contents);
-
+	*/
+	
 	// file struct
 	*file = (struct LFILE *)malloc(sizeof(struct LFILE));
 	
@@ -472,7 +473,7 @@ int createFile(char * dirName, int fileType,
     printf("ERROR: Path [%s] is an invalid path\n", dirName);    
     return 0;
   }
-  
+
   // holds processed string
   char *dirpath = (char*)malloc(sizeof(char)*200);
   
@@ -490,6 +491,11 @@ int createFile(char * dirName, int fileType,
   end[0] = '/';
   end[1] = '\0';
 
+  if(strlen(dName) < 12){
+    printf("ERROR: Filename [%s] too small.\n", dName);
+    return 0;
+  }
+  
   int dirBlock = -1;
 
   if(isPathValid(dirpath, indices, blocks, &dirBlock)){
@@ -519,8 +525,6 @@ int createFile(char * dirName, int fileType,
       tokenD = strtok_r(NULL, "\n", &saveD);
     }
 
-    printf("Path [%s] is a valid path\n", dirName);
-    
     // find and claim the next open block
     int open = getOpenBlock(indices, blocks);
     
@@ -559,22 +563,23 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
 		int * dirBlock){
   // check if path is nonexistant
   if(path == NULL){
-    printf("Path is Null\n");
+    printf("ERROR: Path is Null\n");
     return 0;
   }
   
   // check if path is empty
   if(strcmp(path,"") == 0){
-    printf("Path is empty\n");
+    printf("ERROR: Path is empty\n");
     return 0;
   }
 
   // ensures absolute path
   if(path[0] != '/'){
-    printf("Path is not absolute\n");
+    printf("ERROR: Path is not absolute\n");
     return 0;
   }
-  
+
+  // checks for root
   if(path[0] == '/' && strlen(path) == 1){
     *dirBlock = 0;
     return 1;
@@ -697,8 +702,8 @@ char * readFile(int startBlock, int offset, struct Blocks * blocks,
 // read
 int readData(int blockIndex, int offset, int count, char * buffer,
 	      int buffsize, struct Blocks * blocks, struct Indices * indices){
+  // ensures valid memory location is used
   if(hexToInt(indices[blockIndex]) == OPEN_INDEX){
-    printf("Invalid memory location\n");
     return 0;
   }
   
@@ -934,7 +939,7 @@ void createFileSystem(){
   // creates a filesystem mapping to memory
   mapFileSystem(&blocks, &indices);
 
-  createFile("/home", DIRECTORY_TYPE, indices, blocks);
+  createFile("/ThisIsTheRoot", DIRECTORY_TYPE, indices, blocks);
 
   // unmap filesystem
   munmap(indices, ALLOC_DISK_SPACE);
