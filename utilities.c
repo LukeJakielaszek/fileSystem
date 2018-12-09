@@ -75,90 +75,7 @@ int readLFile(char * buffer, int buffsize, struct LFILE * file,
 void closeLFile(struct LFILE * file);
 int deleteFile(char * dirName,
 		struct Indices * indices, struct Blocks * blocks);
-/*
-int main(){
-  // check validity of entered parameters
-  if(invalidDiskParams()){
-    fprintf(stderr, "ERROR: Invalid Disk Parameters Detected.\n");
-    exit(-1);
-  }
-
-  // calculate maximum used memory and # of blocks
-  getDiskSizes();
   
-  printf("DISK_SIZE %d\n", DISK_SIZE);
-  printf("ALLOC_DISK_SPACE %d\n\n", ALLOC_DISK_SPACE);
-
-  printf("NUM_BLOCKS %d\n\n", NUM_BLOCKS);
-  
-  printf("INDICE_SIZE %d\n", INDICE_SIZE);
-  printf("INDEX_SIZE %d\n\n", INDEX_SIZE);
-  
-  printf("BLOCK_SIZE %d\n", BLOCK_SIZE);
-  printf("DATA_SIZE %d\n", DATA_SIZE);
-
-  // creates a filesystem with allocation array initialized to empty (-1)
-  //  createFileSystem();
-
-  struct Blocks * blocks; // block pointers
-  struct Indices * indices; //indice pointers
-
-  // creates a filesystem mapping to memory
-  mapFileSystem(&blocks, &indices);
-
-  char path[] = "/bluehornpalace";
-  
-  createFile(path, DIRECTORY_TYPE, indices, blocks);
-  
-  struct LFILE * file;
-
-  
-  if(openFile("/boysintheClub/bobbyjoemanbear", WRITE, &file, indices, blocks)){
-    printf("block %d, offset : %d, mode %d, meta [%s]\n",
-    	   file->startBlock, file->offset, file->mode, file->meta);
-  }
-  
-    
-  char text[50] = "mouse";
-  
-  writeLFile(text, file, indices, blocks);
-  
-  char tst[50] = "humpback whale";
-  
-  writeLFile(tst, file, indices, blocks);
-  writeLFile(text, file, indices, blocks);
-  writeLFile(text, file, indices, blocks);
-  writeLFile(text, file, indices, blocks);
-  
-  
-  int buffsize = 10;
-  char * buf = (char*)malloc(sizeof(char)*buffsize);
-
-  int count = readLFile(buf, buffsize, file, indices, blocks);
-  
-  while(count > 0){
-    printf("offset %d : [%s]\n", file->offset, buf);
-    count = readLFile(buf, buffsize, file, indices, blocks);
-  }
-
-  printf("offset %d : [%s]\n", file->offset, buf);
-  
-  
-  // get contents of directory
-  
-  char * contents = readFile(0, 0, blocks, indices);
-  printf("contents : \n[%s]\n", contents);
-  
-  //  closeLFile(file);
-
-  deleteFile("/boysintheClub", indices, blocks);
-
-  munmap(indices, ALLOC_DISK_SPACE);
-    
-  return 0;
-}
-*/
-
 // deletes file from directory structure. Returns 1 on success, 0 on failure.
 // Directories are required to be empty
 int deleteFile(char * dirName,
@@ -259,6 +176,7 @@ int deleteFile(char * dirName,
     sprintf(buffer, "%08X", OPEN_INDEX);
 
     int next = hexToInt(indices[fileNum]);
+    
     // free up index
     while(next != EOF_INDEX){
       // overwrite index value with openvalue
@@ -384,6 +302,17 @@ int openFile(char * filePath, int mode, struct LFILE ** file,
     return 0;
   }
 
+  // checks root directory
+  if(strcmp(filePath, "/") == 0 && mode == READ){
+    // populates file struct
+    *file = (struct LFILE *)malloc(sizeof(struct LFILE));
+    (*file)->startBlock = 0;
+    (*file)->offset = META_SIZE;
+    (*file)->mode = mode;
+    readData(0, 0, 0, (*file)->meta, META_SIZE+1, blocks, indices);	
+    return 1;
+  }
+
   // holds processed string
   char *dirpath = (char*)malloc(sizeof(char)*200);
   
@@ -425,17 +354,15 @@ int openFile(char * filePath, int mode, struct LFILE ** file,
       if(strcmp(tokenL, fName) == 0){
 	fileBlock = atoi(strtok_r(NULL, " ", &saveL));
 
-	free(contents);
-
-	/*
+	// checks for attempt to open directory in write mode
 	contents = readFile(fileBlock, 0, blocks, indices);
-	if(contents[META_SIZE-1] != FILE_TYPE){
+	if(contents[META_SIZE-1] == DIRECTORY_TYPE && mode == WRITE){
 	  free(contents);
+	  printf("Error: Cannot open directories in write mode\n");
 	  return 0;
 	}
 
 	free(contents);
-	*/
 	
 	// file struct
 	*file = (struct LFILE *)malloc(sizeof(struct LFILE));
@@ -450,12 +377,9 @@ int openFile(char * filePath, int mode, struct LFILE ** file,
       // gets the next name
       tokenD = strtok_r(NULL, "\n", &saveD);
     }
-  }else{
-    printf("ERROR: Failed to find file [%s]\n", filePath);
-    // failure to find file
-    return 0;
   }
 
+  printf("ERROR: Failed to find file [%s]\n", filePath);
   return 0;
 }
 
@@ -591,11 +515,10 @@ int isPathValid(char * path, struct Indices * indices, struct Blocks * blocks,
     return 1;
   }
   
+  // directory structure parsing variables
   int startBlock = 0;
   int offset = META_SIZE;
-
   char * total;
-
   char delimP[] = "/";
   char delimD[] = "\n";
   char delimF[] = " ";
@@ -970,12 +893,17 @@ int invalidDiskParams(){
   return isInvalid;
 }
 
-// find disk sizings
+// calculate disk sizings
 void getDiskSizes(){
+  // max number of blocks/indices in filesystem
   NUM_BLOCKS = (int)floor(DISK_SIZE/(BLOCK_SIZE+INDICE_SIZE));
 
+  // total byte size of index
   INDEX_SIZE = NUM_BLOCKS * INDICE_SIZE;
+
+  // total byte size of data
   DATA_SIZE = NUM_BLOCKS * BLOCK_SIZE;
 
+  // total space needed from space supplied
   ALLOC_DISK_SPACE = DATA_SIZE + INDEX_SIZE;
 }

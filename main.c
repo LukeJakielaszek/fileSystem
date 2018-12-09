@@ -25,59 +25,330 @@ int main(){
 
 
   // creates a filesystem with allocation array initialized to empty (-1)
-  //  createFileSystem();
+  createFileSystem();
 
   struct Blocks * blocks; // block pointers
   struct Indices * indices; //indice pointers
 
   // creates a filesystem mapping to memory
+  printf("Mapping file system...\n");
   mapFileSystem(&blocks, &indices);
+  printf("File system mapped\n");
 
-  char path[] = "/datahogunited/potataoemanw";
-  
-  createFile(path, DIRECTORY_TYPE, indices, blocks);
-  
+  // file struct
   struct LFILE * file;
 
-  /*
-  if(openFile("/", WRITE, &file, indices, blocks)){
+  // file reading buffers
+  int buffsize = 10;
+  char * buf = (char*)malloc(sizeof(char)*buffsize);
+  int count = -1;
+
+  // open root, print its contents
+  printf("\nInitial Root Directory contents:\n");
+  if(openFile("/", READ, &file, indices, blocks)){
     printf("block %d, offset : %d, mode %d, meta [%s]\n",
     	   file->startBlock, file->offset, file->mode, file->meta);
     
-    char text[50] = "mouse";  
-    
-    char tst[50] = "humpback whale";
-    
-    writeLFile(text, file, indices, blocks);
-    
-    writeLFile(tst, file, indices, blocks);
-    writeLFile(text, file, indices, blocks);
-    writeLFile(text, file, indices, blocks);
-    writeLFile(text, file, indices, blocks);
-    
-      
-    int buffsize = 10;
-    char * buf = (char*)malloc(sizeof(char)*buffsize);
-    
-    int count = readLFile(buf, buffsize, file, indices, blocks);
+    count = readLFile(buf, buffsize, file, indices, blocks);
     
     while(count > 0){
       printf("offset %d : [%s]\n", file->offset, buf);
       count = readLFile(buf, buffsize, file, indices, blocks);
     }
-	
-    printf("offset %d : [%s]\n", file->offset, buf);
     
     closeLFile(file);
   }
-  */
+  printf("\n");
   
-  //  deleteFile("/datahogunited/tropicalbaannaan", indices, blocks);
   
-  // get contents of directory
-  char * contents = readFile(0, 0, blocks, indices);
-  printf("contents : \n[%s]\n", contents);
+  // attempt making invalid directory
+  char *path = "/datahogunited/potataoemanw";
+  printf("Creating invalid directory [%s]\n", path);
+  
+  createFile(path, DIRECTORY_TYPE, indices, blocks);
 
+  // print roots contents to screen
+  printf("Root Directory contents:\n");
+  if(openFile("/", READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }
+  printf("\n");
+
+  // attempt making valid directory
+  path = "/FinishedThisLab";
+  printf("Creating valid directory [%s]\n", path);
+  
+  createFile(path, DIRECTORY_TYPE, indices, blocks);
+
+  // print roots contents to screen
+  printf("Root Directory contents:\n");
+  if(openFile("/", READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }
+  printf("\n");
+
+  // attempt making valid directory
+  path = "/datahogunited";
+  printf("Creating valid directory [%s]\n", path);
+  
+  createFile(path, DIRECTORY_TYPE, indices, blocks);
+
+  // print roots contents to screen
+  printf("Root Directory contents:\n");
+  if(openFile("/", READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }
+  printf("\n");
+
+  // attempt making valid subdirectory
+  path = "/datahogunited/thisIsAmerica";
+  printf("Creating valid subdirectory [%s]\n", path);
+  
+  createFile(path, DIRECTORY_TYPE, indices, blocks);
+
+  // print roots contents to screen
+  printf("Root Directory contents:\n");
+  if(openFile("/", READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }
+  // print first directory contents to screen
+  printf("First Directory contents:\n");
+  if(openFile("/datahogunited", READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }
+
+  // attempt making valid file
+  path = "/datahogunited/thisIsAmerica/thisIsatestfile.txt";
+  printf("Creating valid file in subdirectory [%s]\n", path);
+  
+  createFile(path, FILE_TYPE, indices, blocks);
+
+  // print file's parent directory contents
+  printf("Parent Directory contents:\n");
+  if(openFile("/datahogunited/thisIsAmerica", READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }  
+  printf("file contents:\n");
+
+  // print file contents to screen
+  if(openFile("/datahogunited/thisIsAmerica/thisIsatestfile.txt", READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }
+  printf("\n");
+
+  //write to created file
+  printf("Writing to file %s...\n", path);
+  if(openFile(path, WRITE, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    writeLFile("Johhny went down to georgia\n", file, indices, blocks);
+    
+    writeLFile("To eat an apple pie\n", file, indices, blocks);
+    
+    closeLFile(file);
+  }  
+  printf("Completed writing\n");
+
+  // print file contents to screen
+  printf("file contents:\n");
+  if(openFile(path, READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }
+  printf("\n");
+
+  // try to delete a directory with contents in it
+  path = "/datahogunited/thisIsAmerica";
+  printf("Attempting to delete non-empty directory [%s]\n", path);
+  deleteFile(path, indices, blocks);
+
+  // delete file
+  path = "/datahogunited/thisIsAmerica/thisIsatestfile.txt";
+  printf("\nAttempting to delete file [%s]\n", path);
+  deleteFile(path, indices, blocks);
+
+  // attempt to print deleted file contents
+  printf("deleted file contents:\n");
+  if(openFile(path, READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }
+
+  // print parent directory contents
+  path = "/datahogunited/thisIsAmerica";
+  printf("Parent Directory contents [%s]:\n", path);
+  if(openFile(path, READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }  
+  printf("\n");
+
+  //create another file within parent directory
+  path = "/datahogunited/thisIsAmerica/thisIsAnotherTest.txt";
+  printf("Creating another file [%s] within parent directory\n", path);
+  createFile(path, FILE_TYPE, indices, blocks);
+
+  // print file's parent directory contents
+  printf("Parent Directory contents:\n");
+  if(openFile("/datahogunited/thisIsAmerica", READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }  
+  printf("file contents:\n");
+
+  // print file contents to screen
+  if(openFile(path, READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }
+  printf("\n");
+
+  //write to created file
+  printf("Writing to file %s...\n", path);
+  if(openFile(path, WRITE, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    writeLFile("Hello Darkness my old friend\n", file, indices, blocks);
+    
+    closeLFile(file);
+  }  
+  printf("Completed writing\n");
+
+  // print file contents to screen
+  printf("file contents:\n");
+  if(openFile(path, READ, &file, indices, blocks)){
+    printf("block %d, offset : %d, mode %d, meta [%s]\n",
+    	   file->startBlock, file->offset, file->mode, file->meta);
+    
+    count = readLFile(buf, buffsize, file, indices, blocks);
+    
+    while(count > 0){
+      printf("offset %d : [%s]\n", file->offset, buf);
+      count = readLFile(buf, buffsize, file, indices, blocks);
+    }
+    
+    closeLFile(file);
+  }
+  printf("\n");
+
+  // unmaps the filesystem
   munmap(indices, ALLOC_DISK_SPACE);
   
   return 0;
